@@ -20,6 +20,8 @@ Follow the `ytmusicapi browser` prompt to paste YouTube Music request headers an
 
 Reads playlists, searches catalog songs, prints a preview table, and writes `out/preview-<playlistId>.csv` (UTF-8 with BOM for Excel) and `out/preview-<playlistId>.html` (filterable browser view). Nothing is created or modified on YouTube Music.
 
+Pass `--pick` (in dry-run or with `--apply`) to interactively pick a song from search results (or run a custom `s <query>` search) for any `keep-video` / `no-match` entry before the final preview and `REBUILD <N>` prompt.
+
 ## Apply (`--apply`)
 
 ```powershell

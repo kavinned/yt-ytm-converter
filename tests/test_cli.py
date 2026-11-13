@@ -352,3 +352,35 @@ def test_dry_run_prints_progress_and_writes_html(monkeypatch, tmp_path, capsys):
     assert "[3/3] Searching:" in captured.err
     assert (tmp_path / "preview-PL1.html").exists()
     assert "preview-PL1.html" in captured.out
+
+
+def test_pick_flag_replaces_unmatched_before_apply_confirm(monkeypatch, tmp_path):
+    from ytm_clean.cli import main
+
+    playlists, searches = _sample_playlists()
+    picked_song = Track("song_obscure", None, "Obscure Jam (Catalog)", ["Nobody"], 210, "MUSIC_VIDEO_TYPE_ATV")
+    searches["obscure jam Nobody"] = [picked_song]
+    fake = FakeYtm(playlists, searches)
+    _patch_ytm(monkeypatch, fake)
+
+    # First input picks candidate 1 for Obscure Jam (kept as no-match because title differs slightly),
+    # second input confirms REBUILD 1.
+    answers = iter(["1", "REBUILD 1"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
+
+    rc = main(["PL1", "--out", str(tmp_path), "--pick", "--apply"])
+    assert rc == 0
+    assert fake.create_calls[0][4] == ["song_alpha", "vid_atv", "song_obscure"]
+
+
+def test_pick_non_interactive_aborts(monkeypatch, tmp_path):
+    from ytm_clean.cli import main
+
+    playlists, searches = _sample_playlists()
+    fake = FakeYtm(playlists, searches)
+    _patch_ytm(monkeypatch, fake)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("1\n"))
+
+    rc = main(["PL1", "--out", str(tmp_path), "--pick"])
+    assert rc == 1
+    assert fake.write_calls == []

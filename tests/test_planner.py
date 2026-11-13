@@ -174,3 +174,62 @@ def test_already_present_atv_detected_even_if_search_misses():
     rows = build_plan([atv, mv], search)
     assert [r.action for r in rows] == [Action.KEEP_SONG, Action.REMOVE_DUP]
     assert not called
+
+
+def test_pick_unresolved_replace_keep_custom_search_and_dup():
+    from ytm_clean.planner import pick_unresolved
+
+    atv_existing = _track("s_exist", title="Existing Song", artists=["Bob"], dur=180, vtype="MUSIC_VIDEO_TYPE_ATV")
+    v_nomatch = _track("v1", title="Super", artists=["SEVENTEEN"], dur=213)
+    v_lowconf = _track("v2", title="Ambiguous", artists=["Alice"], dur=200)
+    v_null = _track(None, title="Unavailable", artists=[], dur=None, vtype=None)
+
+    cand_kr = _track("s_super", title="손오공", artists=["SEVENTEEN"], dur=201, vtype="MUSIC_VIDEO_TYPE_ATV")
+    cand_dup = _track("s_exist", title="Existing Song", artists=["Bob"], dur=180, vtype="MUSIC_VIDEO_TYPE_ATV")
+
+    rows = [
+        PlanRow(0, atv_existing, "song", Action.KEEP_SONG, None, None, "already song"),
+        PlanRow(1, v_nomatch, "video", Action.NO_MATCH, None, None, "none"),
+        PlanRow(2, v_lowconf, "video", Action.KEEP_VIDEO, None, None, "low-confidence"),
+        PlanRow(3, v_null, "other", Action.KEEP_VIDEO, None, None, "unavailable/non-music"),
+    ]
+
+    def search(q: str) -> list[Track]:
+        if "손오공" in q:
+            return [cand_kr]
+        if "ambiguous" in q.lower():
+            return [cand_dup]
+        return []
+
+    inputs = iter(["s 손오공", "1", "1"])  # v1: custom search -> pick 1; v2: pick 1 (already in playlist -> REMOVE_DUP); v_null skipped
+    printed: list[str] = []
+    updated = pick_unresolved(
+        rows,
+        search,
+        input_fn=lambda _p="": next(inputs),
+        out_fn=printed.append,
+    )
+
+    assert updated[0].action == Action.KEEP_SONG
+    assert updated[1].action == Action.REPLACE
+    assert updated[1].replacement == cand_kr
+    assert updated[1].reason == "manual pick"
+    assert updated[2].action == Action.REMOVE_DUP
+    assert updated[2].replacement == cand_dup
+    assert updated[3].action == Action.KEEP_VIDEO
+
+
+def test_pick_unresolved_enter_keeps_and_q_stops():
+    from ytm_clean.planner import pick_unresolved
+
+    v1 = _track("v1", title="One", artists=["A"], dur=200)
+    v2 = _track("v2", title="Two", artists=["A"], dur=200)
+    cand = _track("s1", title="One", artists=["A"], dur=200, vtype="MUSIC_VIDEO_TYPE_ATV")
+    rows = [
+        PlanRow(0, v1, "video", Action.NO_MATCH, None, None, "none"),
+        PlanRow(1, v2, "video", Action.KEEP_VIDEO, None, None, "low-confidence"),
+    ]
+    inputs = iter(["", "q"])
+    updated = pick_unresolved(rows, lambda _q: [cand], input_fn=lambda _p="": next(inputs), out_fn=lambda _s: None)
+    assert updated[0].action == Action.NO_MATCH
+    assert updated[1].action == Action.KEEP_VIDEO

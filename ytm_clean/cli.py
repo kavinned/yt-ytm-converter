@@ -7,7 +7,7 @@ from typing import Any
 from ytm_clean.apply import rebuild, restore_from_snapshot, rollback
 from ytm_clean.client import Ytm, assert_in_scope, parse_playlist_id, playlist_url
 from ytm_clean.models import Action, PlanRow, Track
-from ytm_clean.planner import build_plan
+from ytm_clean.planner import build_plan, pick_unresolved
 from ytm_clean.preview import counts, render_table, write_csv, write_html
 
 _ORIG_INPUT = builtins.input
@@ -31,6 +31,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--apply",
         action="store_true",
         help="Rebuild playlists with changes after typed confirmation",
+    )
+    parser.add_argument(
+        "--pick",
+        action="store_true",
+        help="Interactively choose replacements for keep-video and no-match entries",
     )
     parser.add_argument(
         "--rollback",
@@ -88,7 +93,7 @@ def _run_restore(args: argparse.Namespace) -> int:
 
 
 def _plan_one(
-    client: Any, raw_pid: str, out_dir: Path
+    client: Any, raw_pid: str, out_dir: Path, *, pick: bool = False
 ) -> tuple[str, dict[str, Any], list[PlanRow]]:
     pid = parse_playlist_id(raw_pid)
     assert_in_scope(pid, {})
@@ -111,6 +116,9 @@ def _plan_one(
     rows = build_plan(tracks, client.search_songs, on_progress=_on_progress)
     if is_tty and wrote_progress:
         print(f"\r{' ' * 79}\r", end="", file=sys.stderr, flush=True)
+
+    if pick:
+        rows = pick_unresolved(rows, client.search_songs, input_fn=input)
 
     title = meta.get("title") or pid
     print(render_table(rows, title))
@@ -168,6 +176,10 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: provide at least one playlist ID/URL, --rollback, or --restore-from.", file=sys.stderr)
         return 2
 
+    if args.pick and not _can_prompt():
+        print("Aborted: non-interactive stdin cannot use --pick.", file=sys.stderr)
+        return 1
+
     try:
         client = Ytm(args.auth)
     except Exception as exc:
@@ -180,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
 
     for raw_pid in args.playlists:
         try:
-            planned.append(_plan_one(client, raw_pid, out_dir))
+            planned.append(_plan_one(client, raw_pid, out_dir, pick=args.pick))
         except Exception as exc:
             print(f"Error [{raw_pid}]: {exc}", file=sys.stderr)
             failures += 1

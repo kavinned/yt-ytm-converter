@@ -152,3 +152,107 @@ def build_plan(
             )
 
     return rows
+
+
+def _fmt_dur(seconds: int | None) -> str:
+    if seconds is None:
+        return "?:??"
+    mins, secs = divmod(seconds, 60)
+    return f"{mins}:{secs:02d}"
+
+
+def _initial_candidates(track: Track, search: Callable[[str], list[Track]]) -> list[Track]:
+    seen_ids: set[str] = set()
+    merged: list[Track] = []
+    q_norm = _search_query(track)
+    queries = [q_norm]
+    q_raw = _raw_search_query(track)
+    if q_raw.casefold() != q_norm.casefold():
+        queries.append(q_raw)
+    for query in queries:
+        for cand in search(query):
+            if cand.video_id and cand.video_id not in seen_ids:
+                seen_ids.add(cand.video_id)
+                merged.append(cand)
+            if len(merged) >= 8:
+                return merged
+    return merged
+
+
+def pick_unresolved(
+    rows: list[PlanRow],
+    search: Callable[[str], list[Track]],
+    *,
+    input_fn: Callable[[str], str] = input,
+    out_fn: Callable[[str], None] = print,
+    limit: int = 8,
+) -> list[PlanRow]:
+    """Interactively resolve keep-video and no-match rows from search results."""
+    seen_songs: list[Track] = []
+    for row in rows:
+        if row.action == Action.KEEP_SONG and row.track.video_id:
+            seen_songs.append(row.track)
+        elif row.action == Action.REPLACE and row.replacement is not None:
+            seen_songs.append(row.replacement)
+
+    updated = list(rows)
+    for pos, row in enumerate(updated):
+        if row.action not in (Action.KEEP_VIDEO, Action.NO_MATCH) or not row.track.video_id:
+            continue
+
+        cands = _initial_candidates(row.track, search)[:limit]
+        while True:
+            artists = ", ".join(row.track.artists) or "Unknown"
+            out_fn(
+                f"\n[{row.index}] {row.track.title} - {artists} ({_fmt_dur(row.track.duration_s)}) "
+                f"[{row.action.value}: {row.reason}] https://music.youtube.com/watch?v={row.track.video_id}"
+            )
+            if not cands:
+                out_fn("  (no search results)")
+            for i, cand in enumerate(cands, 1):
+                c_artists = ", ".join(cand.artists) or "Unknown"
+                out_fn(
+                    f"  {i}. {cand.title} - {c_artists} ({_fmt_dur(cand.duration_s)}) [{cand.video_id}]"
+                )
+            try:
+                raw = input_fn(
+                    "Choose [1-N], 's <query>' to search, Enter to keep, 'q' to stop picking: "
+                ).strip()
+            except (EOFError, KeyboardInterrupt):
+                return updated
+
+            if raw in ("", "0"):
+                break
+            if raw.lower() == "q":
+                return updated
+            if raw.lower().startswith("s "):
+                custom_q = raw[2:].strip()
+                if custom_q:
+                    cands = [c for c in search(custom_q) if c.video_id][:limit]
+                continue
+            if raw.isdigit() and 1 <= int(raw) <= len(cands):
+                chosen = cands[int(raw) - 1]
+                if any(_same_song(chosen, s) for s in seen_songs):
+                    updated[pos] = PlanRow(
+                        row.index,
+                        row.track,
+                        row.classification,
+                        Action.REMOVE_DUP,
+                        chosen,
+                        1.0,
+                        "manual pick (duplicate)",
+                    )
+                else:
+                    seen_songs.append(chosen)
+                    updated[pos] = PlanRow(
+                        row.index,
+                        row.track,
+                        row.classification,
+                        Action.REPLACE,
+                        chosen,
+                        1.0,
+                        "manual pick",
+                    )
+                break
+            out_fn("Invalid choice.")
+    return updated
