@@ -1,0 +1,2 @@
+ytmusicapi==1.12.3
+pytest==9.2.0
