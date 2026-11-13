@@ -18,3 +18,14 @@ class Track:
     artists: list[str]
     duration_s: int | None
     video_type: str | None
+
+
+@dataclass(frozen=True)
+class PlanRow:
+    index: int
+    track: Track
+    classification: str
+    action: Action
+    replacement: Track | None
+    confidence: float | None
+    reason: str
