@@ -35,6 +35,7 @@ _BRACKET_NOISE_RE = re.compile(rf"[\(\[]\s*(?:{_NOISE_ALT})\s*[\)\]]")
 _INLINE_NOISE_RE = re.compile(
     r"\b(?:official\s+(?:music\s+)?video|official\s+m/v|official\s+audio|audio\s+clip|lyric\s+video|m/v|hd|4k)\b"
 )
+_TRAILING_MV_RE = re.compile(r"(?<=\S)\s+mv\b")
 _LANG_VER_RE = re.compile(r"\b(japanese|english|korean|chinese|spanish)\s+ver(?:sion)?\b")
 _TRACK_NUM_RE = re.compile(r"^\d{1,2}\.\s+")
 _PARENS_RE = re.compile(r"[\(\[]([^)\]]+)[\)\]]")
@@ -65,6 +66,8 @@ def normalize_title(s: str) -> str:
     text = _INLINE_NOISE_RE.sub(" ", text)
     text = _FEAT_TAIL_RE.sub(" ", text)
     text = _NON_WORD_RE.sub(" ", text)
+    text = " ".join(text.split())
+    text = _TRAILING_MV_RE.sub(" ", text)
     return " ".join(text.split())
 
 
@@ -74,6 +77,7 @@ def search_query_title(s: str) -> str:
     text = _QUERY_FEAT_RE.sub(" ", text)
     text = _QUERY_NOISE_RE.sub(" ", text)
     text = _QUERY_INLINE_NOISE_RE.sub(" ", text)
+    text = re.sub(r"(?<=\S)\s+mv\b", " ", text, flags=re.IGNORECASE)
     return " ".join(text.split())
 
 
@@ -95,10 +99,17 @@ def normalize_artists(names: list[str]) -> set[str]:
     result: set[str] = set()
     for name in names:
         for part in _ARTIST_SPLIT_RE.split(_fold(name)):
-            cleaned = " ".join(_NON_WORD_RE.sub(" ", part).split())
-            if cleaned:
-                result.add(cleaned)
+            chunks = [_PARENS_RE.sub(" ", part), *(m.group(1) for m in _PARENS_RE.finditer(part))]
+            for chunk in chunks:
+                cleaned = " ".join(_NON_WORD_RE.sub(" ", chunk).split())
+                if cleaned:
+                    result.add(cleaned)
     return result
+
+
+def is_single_artist(names: list[str]) -> bool:
+    parts = [p for n in names for p in _ARTIST_SPLIT_RE.split(_fold(n)) if p.strip()]
+    return len(parts) == 1
 
 
 def version_tokens(s: str) -> frozenset[str]:

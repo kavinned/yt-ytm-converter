@@ -104,6 +104,29 @@ def test_identical_song_tie_within_15s_accepts() -> None:
     assert matched is not None and matched.track.video_id == "s2"
 
 
+def test_bilingual_artist_bilingual_tie_and_long_mv() -> None:
+    # IZ*ONE vs IZ*ONE (아이즈원) + Standing Next to You / 정국 (Jung Kook)
+    v_fiesta = _track("FIESTA", ["IZ*ONE"], 218)
+    c_fiesta = _track("FIESTA", ["IZ*ONE (아이즈원)"], 218, video_id="s_fi", video_type="MUSIC_VIDEO_TYPE_ATV")
+    assert pick_match(v_fiesta, [c_fiesta])[1] == "accept"
+
+    # Bilingual tie-break: 내가 제일 잘 나가 (I Am The Best) vs I Am The Best
+    v_2ne1 = _track("I Am the Best", ["2NE1"], 215)
+    c_kr = _track("내가 제일 잘 나가 (I Am The Best)", ["2NE1"], 211, video_id="s_kr", video_type="MUSIC_VIDEO_TYPE_ATV")
+    c_en = _track("I Am The Best", ["2NE1"], 209, video_id="s_en", video_type="MUSIC_VIDEO_TYPE_ATV")
+    m_2ne1, h_2ne1 = pick_match(v_2ne1, [c_kr, c_en])
+    assert h_2ne1 == "accept" and m_2ne1 is not None and m_2ne1.track.video_id == "s_kr"
+
+    # Long MV (105s longer than song) accepts, teaser (108s shorter than song) still rejected
+    v_long = _track("9 and Three Quarters (Run Away)", ["TOMORROW X TOGETHER"], 317)
+    c_long = _track("9 and Three Quarters (Run Away)", ["TOMORROW X TOGETHER"], 212, video_id="s_ra", video_type="MUSIC_VIDEO_TYPE_ATV")
+    assert pick_match(v_long, [c_long])[1] == "accept"
+
+    v_teaser = _track("Salty & Sweet", ["aespa"], 94)
+    c_full = _track("Salty & Sweet", ["aespa"], 202, video_id="s_ss", video_type="MUSIC_VIDEO_TYPE_ATV")
+    assert score_candidate(v_teaser, c_full) is None
+
+
 def test_artist_gate() -> None:
     video = _track("Song Name", ["Artist A"], 200)
     other = _track("Song Name", ["Artist B"], 200, video_type="MUSIC_VIDEO_TYPE_ATV")
@@ -139,6 +162,9 @@ def test_below_threshold_is_low_confidence() -> None:
     assert scored is not None
     assert scored.score < 0.90
     assert pick_match(video, [cand]) == (None, "low-confidence")
+
+    collab_single_str = _track("Song Name", ["Artist A & Artist B"], 200)
+    assert pick_match(collab_single_str, [cand]) == (None, "low-confidence")
 
 
 def test_no_cands() -> None:

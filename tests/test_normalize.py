@@ -15,6 +15,8 @@ def test_strips_noise():
     assert normalize_title("Song featuring Bob (Official Music Video) [4K]") == "song"
     assert normalize_title("Song OFFICIAL M/V (feat. Bob)") == "song"
     assert normalize_title("Song [M/V]") == "song"
+    assert normalize_title("IVE 아이브 'WAVE' MV") == normalize_title("IVE 아이브 WAVE")
+    assert normalize_title("MV") == "mv"
 
 
 def test_keeps_meaningful_parens():
@@ -29,6 +31,8 @@ def test_unicode_and_punctuation():
 def test_artists_split_and_case():
     assert normalize_artists(["A & B", "c"]) == {"a", "b", "c"}
     assert normalize_artists(["A, B", "D feat. E"]) == {"a", "b", "d", "e"}
+    assert ({"iz one"} | normalize_artists(["아이즈원"])) <= normalize_artists(["IZ*ONE (아이즈원)"])
+    assert "jung kook" in normalize_artists(["정국 (Jung Kook)"])
 
 
 def test_version_tokens():
