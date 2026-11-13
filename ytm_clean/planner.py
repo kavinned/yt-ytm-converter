@@ -31,13 +31,17 @@ def _search_query(track: Track) -> str:
 
 
 def build_plan(
-    tracks: list[Track], search: Callable[[str], list[Track]]
+    tracks: list[Track],
+    search: Callable[[str], list[Track]],
+    *,
+    on_progress: Callable[[int, int, Track], None] | None = None,
 ) -> list[PlanRow]:
     """Build an order-preserving replacement plan for playlist tracks."""
     seen_songs: list[Track] = [
         t for t in tracks if t.video_id and t.video_type == ATV_TYPE
     ]
     rows: list[PlanRow] = []
+    total = len(tracks)
 
     for idx, track in enumerate(tracks):
         if not track.video_id:
@@ -62,6 +66,8 @@ def build_plan(
             )
             continue
 
+        if on_progress is not None:
+            on_progress(idx + 1, total, track)
         cands = search(_search_query(track))
         match, hint = pick_match(track, cands)
         if match is None:

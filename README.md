@@ -18,7 +18,7 @@ Follow the `ytmusicapi browser` prompt to paste YouTube Music request headers an
 .venv\Scripts\python -m ytm_clean <playlist_url_or_id> [<playlist_2> ...]
 ```
 
-Reads playlists, searches catalog songs, prints a preview table, and writes `out/preview-<playlistId>.csv` (UTF-8 with BOM for Excel). Nothing is created or modified on YouTube Music.
+Reads playlists, searches catalog songs, prints a preview table, and writes `out/preview-<playlistId>.csv` (UTF-8 with BOM for Excel) and `out/preview-<playlistId>.html` (filterable browser view). Nothing is created or modified on YouTube Music.
 
 ## Apply (`--apply`)
 

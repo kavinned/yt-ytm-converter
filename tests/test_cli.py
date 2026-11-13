@@ -335,3 +335,20 @@ def test_rollback_delete_new_eof_aborts_cleanly(monkeypatch, tmp_path, capsys):
     assert rc == 0
     assert "Delete cancelled." in out
     assert fake.deleted == []
+
+
+def test_dry_run_prints_progress_and_writes_html(monkeypatch, tmp_path, capsys):
+    from ytm_clean.cli import main
+
+    playlists, searches = _sample_playlists()
+    fake = FakeYtm(playlists, searches)
+    _patch_ytm(monkeypatch, fake)
+
+    rc = main(["PL1", "--out", str(tmp_path)])
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "Reading playlist PL1..." in captured.err
+    assert "[1/3] Searching:" in captured.err
+    assert "[3/3] Searching:" in captured.err
+    assert (tmp_path / "preview-PL1.html").exists()
+    assert "preview-PL1.html" in captured.out

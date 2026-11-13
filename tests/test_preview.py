@@ -2,7 +2,7 @@ import csv
 
 from ytm_clean.apply import final_video_ids
 from ytm_clean.models import Action, PlanRow, Track
-from ytm_clean.preview import counts, render_table, write_csv
+from ytm_clean.preview import counts, render_table, write_csv, write_html
 
 
 def _track(
@@ -184,3 +184,22 @@ def test_table_final_length_skips_null_video_id():
     expected_final = len(final_video_ids(rows))
     assert expected_final == 2
     assert f"final length 4 -> {expected_final}" in out
+
+
+def test_write_html_self_contained_and_escaped(tmp_path):
+    repl = _track(title="Clean Song", artists=["Artist B"], video_id="atv999", duration_s=199, video_type="MUSIC_VIDEO_TYPE_ATV")
+    rows = [
+        _row(0, Action.REPLACE, title='Track <script>alert(1)</script>', artists=["Artist A"], video_id="omv111", replacement=repl, confidence=0.95),
+        _row(1, Action.KEEP_SONG, title="Original Song", video_id="atv222", classification="song"),
+    ]
+    out_html = tmp_path / "preview-PL1.html"
+    write_html(rows, 'My <Playlist>', out_html)
+
+    html_text = out_html.read_text(encoding="utf-8")
+    assert "<!doctype html>" in html_text.lower()
+    assert "<script>alert(1)</script>" not in html_text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html_text
+    assert "My &lt;Playlist&gt;" in html_text
+    assert "https://music.youtube.com/watch?v=omv111" in html_text
+    assert "https://music.youtube.com/watch?v=atv999" in html_text
+    assert "final length 2 -&gt; 2" in html_text or "final length 2 &rarr; 2" in html_text or "final length 2 -> 2" in html_text

@@ -146,3 +146,17 @@ def test_replan_is_noop():
     actions2 = {r.action for r in plan2}
     assert Action.REPLACE not in actions2
     assert Action.REMOVE_DUP not in actions2
+
+
+def test_build_plan_calls_on_progress():
+    tracks = [
+        _track("s0", title="Song Zero", vtype="MUSIC_VIDEO_TYPE_ATV"),
+        _track("v1", title="Video One", vtype="MUSIC_VIDEO_TYPE_OMV"),
+    ]
+    seen: list[tuple[int, int, str]] = []
+    build_plan(
+        tracks,
+        lambda _q: [],
+        on_progress=lambda i, total, t: seen.append((i, total, t.title)),
+    )
+    assert seen == [(2, 2, "Video One")]

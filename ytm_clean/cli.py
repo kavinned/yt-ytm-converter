@@ -6,9 +6,9 @@ from typing import Any
 
 from ytm_clean.apply import rebuild, restore_from_snapshot, rollback
 from ytm_clean.client import Ytm, assert_in_scope, parse_playlist_id, playlist_url
-from ytm_clean.models import Action, PlanRow
+from ytm_clean.models import Action, PlanRow, Track
 from ytm_clean.planner import build_plan
-from ytm_clean.preview import counts, render_table, write_csv
+from ytm_clean.preview import counts, render_table, write_csv, write_html
 
 _ORIG_INPUT = builtins.input
 
@@ -92,13 +92,34 @@ def _plan_one(
 ) -> tuple[str, dict[str, Any], list[PlanRow]]:
     pid = parse_playlist_id(raw_pid)
     assert_in_scope(pid, {})
+    print(f"Reading playlist {pid}...", file=sys.stderr, flush=True)
     meta, tracks = client.read_playlist(pid)
     assert_in_scope(pid, meta)
-    rows = build_plan(tracks, client.search_songs)
-    print(render_table(rows, meta.get("title") or pid))
+
+    is_tty = bool(sys.stderr is not None and sys.stderr.isatty())
+    wrote_progress = False
+
+    def _on_progress(done: int, total: int, track: Track) -> None:
+        nonlocal wrote_progress
+        wrote_progress = True
+        msg = f"[{done}/{total}] Searching: {track.title[:45]}"
+        if is_tty:
+            print(f"\r{msg:<79}", end="", file=sys.stderr, flush=True)
+        else:
+            print(msg, file=sys.stderr, flush=True)
+
+    rows = build_plan(tracks, client.search_songs, on_progress=_on_progress)
+    if is_tty and wrote_progress:
+        print(f"\r{' ' * 79}\r", end="", file=sys.stderr, flush=True)
+
+    title = meta.get("title") or pid
+    print(render_table(rows, title))
     csv_path = out_dir / f"preview-{pid}.csv"
+    html_path = out_dir / f"preview-{pid}.html"
     write_csv(rows, csv_path)
+    write_html(rows, title, html_path)
     print(f"Preview CSV written: {csv_path}")
+    print(f"Preview HTML written: {html_path}")
     return pid, meta, rows
 
 
