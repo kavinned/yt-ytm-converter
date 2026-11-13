@@ -10,7 +10,11 @@ python -m venv .venv
 .venv\Scripts\ytmusicapi browser
 ```
 
-Follow the `ytmusicapi browser` prompt to paste YouTube Music request headers and create `browser.json` in the project root (or pass `--auth path/to/browser.json`). `browser.json` is gitignored and must not be committed.
+Follow the `ytmusicapi browser` prompt to paste YouTube Music request headers and create `browser.json` in the project root (or pass `--auth path/to/browser.json`). `browser.json` is gitignored and must not be committed. Enable the repo secret-guard hooks on new clones:
+
+```powershell
+git config core.hooksPath .githooks
+```
 
 ## Dry Run (default, zero writes)
 

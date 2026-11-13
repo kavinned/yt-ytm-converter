@@ -1,6 +1,7 @@
 import csv
 import html
 from pathlib import Path
+from urllib.parse import quote
 
 from ytm_clean.models import Action, PlanRow
 
@@ -75,6 +76,16 @@ def render_table(rows: list[PlanRow], playlist_title: str) -> str:
     return "\n".join(lines)
 
 
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(val: str) -> str:
+    stripped = val.lstrip(" ")
+    if stripped.startswith(_CSV_FORMULA_PREFIXES):
+        return "'" + val
+    return val
+
+
 def write_csv(rows: list[PlanRow], path: str | Path) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -82,14 +93,15 @@ def write_csv(rows: list[PlanRow], path: str | Path) -> None:
         writer = csv.writer(f)
         writer.writerow(COLUMNS)
         for row in rows:
-            writer.writerow(_row_values(row))
+            writer.writerow([_csv_safe(v) for v in _row_values(row)])
 
 
 def _watch_cell(vid: str) -> str:
     if not vid:
         return ""
     esc = html.escape(vid, quote=True)
-    return f'<a href="https://music.youtube.com/watch?v={esc}" target="_blank" rel="noopener">{esc}</a>'
+    href_id = html.escape(quote(vid, safe=""), quote=True)
+    return f'<a href="https://music.youtube.com/watch?v={href_id}" target="_blank" rel="noopener">{esc}</a>'
 
 
 def write_html(rows: list[PlanRow], playlist_title: str, path: str | Path) -> None:

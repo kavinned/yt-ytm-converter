@@ -27,10 +27,11 @@ def parse_playlist_id(s: str) -> str:
         pid = vals[0].strip() if vals else ""
         if not pid:
             raise ValueError(f"URL missing 'list=' playlist parameter: {s!r}")
-        return pid
-    if any(ch.isspace() for ch in raw):
+    else:
+        pid = raw
+    if any(ch.isspace() for ch in pid) or any(ch in pid for ch in "/\\?#&") or ".." in pid:
         raise ValueError(f"Invalid playlist ID: {s!r}")
-    return raw
+    return pid
 
 
 def assert_in_scope(pid: str, meta: dict[str, Any]) -> None:

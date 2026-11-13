@@ -27,7 +27,11 @@ try {
             $ExitCode = $LASTEXITCODE
             throw "ytmusicapi browser exited with code $ExitCode"
         }
-        & $Py -c "import json; p='browser.json'; d=json.load(open(p)); [d.pop(k,None) for k in ['/youtubei/v1/browse?prettyPrint=false','music.youtube.com','content-encoding']]; json.dump(d,open(p,'w'),indent=2)"
+        & $Py -c "import json, pathlib; p=pathlib.Path('browser.json'); tmp=p.with_suffix('.tmp'); d=json.loads(p.read_text(encoding='utf-8')); [d.pop(k,None) for k in ['/youtubei/v1/browse?prettyPrint=false','music.youtube.com','content-encoding']]; tmp.write_text(json.dumps(d,indent=2),encoding='utf-8'); tmp.replace(p)"
+        if ($LASTEXITCODE -ne 0) {
+            $ExitCode = $LASTEXITCODE
+            throw "Failed to normalize browser.json (exit code $ExitCode)"
+        }
     }
 
     $Choice = (Read-Host "Choose: [1] Preview (default)  [2] Apply  [3] Pick + Apply").Trim()

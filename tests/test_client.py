@@ -55,7 +55,16 @@ def test_parse_url():
 
 
 def test_parse_bad():
-    for bad in ["", "   ", "https://music.youtube.com/watch?v=123", "not a valid id"]:
+    for bad in [
+        "",
+        "   ",
+        "https://music.youtube.com/watch?v=123",
+        "not a valid id",
+        "..\\..\\evil",
+        "PL..evil",
+        "https://music.youtube.com/playlist?list=../../evil",
+        "https://music.youtube.com/playlist?list=PLa/b",
+    ]:
         with pytest.raises(ValueError):
             parse_playlist_id(bad)
 

@@ -203,3 +203,21 @@ def test_write_html_self_contained_and_escaped(tmp_path):
     assert "https://music.youtube.com/watch?v=omv111" in html_text
     assert "https://music.youtube.com/watch?v=atv999" in html_text
     assert "final length 2 -&gt; 2" in html_text or "final length 2 &rarr; 2" in html_text or "final length 2 -> 2" in html_text
+
+
+def test_csv_neutralizes_formula_injection(tmp_path):
+    rows = [
+        _row(0, Action.NO_MATCH, title="=CMD|' /C calc'!A0", artists=["@evil", "+plus"], reason="-dash"),
+        _row(1, Action.NO_MATCH, title="  =SUM(A1:A2)", artists=["\tTab"]),
+    ]
+    out_csv = tmp_path / "preview-PL1.csv"
+    write_csv(rows, out_csv)
+
+    with open(out_csv, "r", encoding="utf-8-sig", newline="") as f:
+        parsed = list(csv.reader(f))
+
+    assert parsed[1][1] == "'=CMD|' /C calc'!A0"
+    assert parsed[1][2] == "'@evil, +plus"
+    assert parsed[1][11] == "'-dash"
+    assert parsed[2][1] == "'  =SUM(A1:A2)"
+    assert parsed[2][2] == "'\tTab"
