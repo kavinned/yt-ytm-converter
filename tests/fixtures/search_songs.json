@@ -1,0 +1,16 @@
+[
+  {
+    "videoId": "song_repl_002",
+    "title": "Hit Track",
+    "artists": [{"name": "Artist Two", "id": "UC_a2"}],
+    "duration_seconds": 194,
+    "resultType": "song"
+  },
+  {
+    "videoId": "song_alt_002",
+    "title": "Hit Track (Live)",
+    "artists": [{"name": "Artist Two", "id": "UC_a2"}],
+    "duration_seconds": 230,
+    "resultType": "song"
+  }
+]

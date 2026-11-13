@@ -1,0 +1,41 @@
+{
+  "id": "PLtest123",
+  "title": "Test Mixed Playlist",
+  "description": "Sample playlist for tests",
+  "privacy": "PRIVATE",
+  "owned": true,
+  "tracks": [
+    {
+      "videoId": "atv_001",
+      "setVideoId": "set_001",
+      "title": "Studio Song",
+      "artists": [{"name": "Artist One", "id": "UC_a1"}],
+      "duration_seconds": 210,
+      "videoType": "MUSIC_VIDEO_TYPE_ATV"
+    },
+    {
+      "videoId": "omv_002",
+      "setVideoId": "set_002",
+      "title": "Hit Track (Official Video)",
+      "artists": [{"name": "Artist Two", "id": "UC_a2"}],
+      "duration_seconds": 195,
+      "videoType": "MUSIC_VIDEO_TYPE_OMV"
+    },
+    {
+      "videoId": "ugc_003",
+      "setVideoId": "set_003",
+      "title": "Cover Song (Lyrics)",
+      "artists": [{"name": "Artist Three", "id": "UC_a3"}],
+      "duration_seconds": 180,
+      "videoType": "MUSIC_VIDEO_TYPE_UGC"
+    },
+    {
+      "videoId": null,
+      "setVideoId": "set_004",
+      "title": "Unavailable Episode",
+      "artists": [],
+      "duration_seconds": null,
+      "videoType": null
+    }
+  ]
+}
