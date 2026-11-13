@@ -212,7 +212,8 @@ def pick_unresolved(
             for i, cand in enumerate(cands, 1):
                 c_artists = ", ".join(cand.artists) or "Unknown"
                 out_fn(
-                    f"  {i}. {cand.title} - {c_artists} ({_fmt_dur(cand.duration_s)}) [{cand.video_id}]"
+                    f"  {i}. {cand.title} - {c_artists} ({_fmt_dur(cand.duration_s)}) "
+                    f"https://music.youtube.com/watch?v={cand.video_id}"
                 )
             try:
                 raw = input_fn(

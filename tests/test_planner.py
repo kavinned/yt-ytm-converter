@@ -217,6 +217,7 @@ def test_pick_unresolved_replace_keep_custom_search_and_dup():
     assert updated[2].action == Action.REMOVE_DUP
     assert updated[2].replacement == cand_dup
     assert updated[3].action == Action.KEEP_VIDEO
+    assert any("https://music.youtube.com/watch?v=s_super" in line for line in printed)
 
 
 def test_pick_unresolved_enter_keeps_and_q_stops():
