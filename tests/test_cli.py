@@ -305,3 +305,33 @@ def test_python_m_ytm_clean_help():
     assert "--apply" in proc.stdout
     assert "--rollback" in proc.stdout
     assert "--yes-i-mean-it" not in proc.stdout
+
+
+def test_delete_new_without_rollback_rejected(capsys):
+    from ytm_clean.cli import main
+
+    rc = main(["--delete-new"])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "--rollback" in err
+
+
+def test_rollback_delete_new_eof_aborts_cleanly(monkeypatch, tmp_path, capsys):
+    from ytm_clean.cli import main
+
+    playlists, searches = _sample_playlists()
+    fake = FakeYtm(playlists, searches)
+    _patch_ytm(monkeypatch, fake)
+    monkeypatch.setattr("builtins.input", lambda _prompt="": "REBUILD 1")
+    assert main(["PL1", "--out", str(tmp_path), "--apply"]) == 0
+    capsys.readouterr()
+
+    def _raise_eof(_prompt=""):
+        raise EOFError()
+
+    monkeypatch.setattr("builtins.input", _raise_eof)
+    rc = main(["--rollback", "PL1", "--delete-new", "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Delete cancelled." in out
+    assert fake.deleted == []

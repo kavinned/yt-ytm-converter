@@ -5,14 +5,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ytm_clean.client import assert_in_scope
+from ytm_clean.client import assert_in_scope, playlist_url
 from ytm_clean.models import Action, PlanRow, Track
 
 CHUNK_SIZE = 100
-
-
-def _playlist_url(pid: str) -> str:
-    return f"https://music.youtube.com/playlist?list={pid}"
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
@@ -94,7 +90,7 @@ def rebuild(
         done_count: int = state["done_count"]
 
         if done_count >= len(expected_ids):
-            print(f"Already complete: {_playlist_url(new_id)}")
+            print(f"Already complete: {playlist_url(new_id)}")
             return new_id
 
         _, existing = client.read_playlist(new_id)
@@ -111,7 +107,7 @@ def rebuild(
                 state_path,
                 {"new_id": new_id, "expected_ids": expected_ids, "done_count": done_count},
             )
-            print(f"Already complete: {_playlist_url(new_id)}")
+            print(f"Already complete: {playlist_url(new_id)}")
             return new_id
 
         _add_in_chunks(client, new_id, missing, state_path, expected_ids, done_count)
@@ -156,12 +152,16 @@ def rollback(
         else None
     )
     lines = [
-        f"Original playlist (untouched): {_playlist_url(pid)}",
+        f"Original playlist (untouched): {playlist_url(pid)}",
         f"New playlist ID: {new_id or '(none)'}",
     ]
     if delete_new and new_id and client is not None:
         prompt_fn = confirm or input
-        if prompt_fn(f"Type {new_id} to delete new playlist: ").strip() == new_id:
+        try:
+            answer = prompt_fn(f"Type {new_id} to delete new playlist: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            answer = ""
+        if answer == new_id:
             client.delete_playlist(new_id)
             state_path.unlink(missing_ok=True)
             lines.append(f"Deleted new playlist: {new_id}")

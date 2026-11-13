@@ -5,16 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from ytm_clean.apply import rebuild, restore_from_snapshot, rollback
-from ytm_clean.client import Ytm, assert_in_scope, parse_playlist_id
+from ytm_clean.client import Ytm, assert_in_scope, parse_playlist_id, playlist_url
 from ytm_clean.models import Action, PlanRow
 from ytm_clean.planner import build_plan
 from ytm_clean.preview import counts, render_table, write_csv
 
 _ORIG_INPUT = builtins.input
-
-
-def _playlist_url(pid: str) -> str:
-    return f"https://music.youtube.com/playlist?list={pid}"
 
 
 def _can_prompt() -> bool:
@@ -87,7 +83,7 @@ def _run_restore(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"Restore failed: {exc}", file=sys.stderr)
         return 1
-    print(f"Restored playlist: {_playlist_url(new_id)}")
+    print(f"Restored playlist: {playlist_url(new_id)}")
     return 0
 
 
@@ -132,7 +128,7 @@ def _print_final_report(
     print("New playlists:")
     for pid, meta, _, new_id in rebuilt:
         title = meta.get("title") or pid
-        print(f"  - {title}: {_playlist_url(new_id)}")
+        print(f"  - {title}: {playlist_url(new_id)}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -140,6 +136,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    if args.delete_new and not args.rollback:
+        print("Error: --delete-new requires --rollback.", file=sys.stderr)
+        return 1
     if args.rollback:
         return _run_rollback(args)
     if args.restore_from:

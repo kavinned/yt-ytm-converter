@@ -10,7 +10,7 @@ from ytm_clean.apply import (
     rollback,
     write_snapshot,
 )
-from ytm_clean.client import ScopeError
+from ytm_clean.client import ScopeError, Ytm
 from ytm_clean.models import Action, PlanRow, Track
 
 
@@ -389,3 +389,70 @@ def test_null_video_id_and_empty_replace_skipped_and_reported(
     assert [t.video_id for t in fake.playlists[new_id][1]] == ["a", "b"]
     assert "index 1" in out
     assert "index 2" in out
+
+
+def test_add_in_chunks_does_not_advance_state_on_silent_api_failure(tmp_path: Path) -> None:
+    vids = [f"v{i}" for i in range(250)]
+    rows = [_row(i, Action.KEEP_SONG, vid) for i, vid in enumerate(vids)]
+    meta = {"id": "PL1", "title": "SilentFail", "description": "", "privacy": "PRIVATE", "owned": True}
+
+    class _RawApi:
+        def __init__(self) -> None:
+            self.created: list[str] = []
+            self.add_calls = 0
+
+        def get_playlist(self, playlistId: str, limit=None):
+            return {
+                "id": playlistId,
+                "title": "SilentFail [ytm-clean]",
+                "description": "",
+                "privacy": "PRIVATE",
+                "owned": True,
+                "tracks": [{"videoId": v, "title": v} for v in self.created],
+            }
+
+        def create_playlist(self, title: str, description: str, privacy_status: str = "PRIVATE", video_ids=None):
+            self.created.extend(video_ids or [])
+            return "PL_NEW_RAW"
+
+        def add_playlist_items(self, playlistId: str, videoIds=None, duplicates: bool = False):
+            self.add_calls += 1
+            if self.add_calls == 2:
+                return {"status": "STATUS_FAILED"}
+            self.created.extend(videoIds or [])
+            return {"status": "STATUS_SUCCEEDED"}
+
+    raw_api = _RawApi()
+    client = Ytm(api=raw_api)
+
+    with pytest.raises(RuntimeError, match="add_playlist_items failed"):
+        rebuild(client, "PL1", meta, rows, tmp_path)
+
+    state_path = tmp_path / "state-PL1.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["done_count"] == 200
+    assert len(raw_api.created) == 200
+
+    resumed_id = rebuild(client, "PL1", meta, rows, tmp_path)
+    assert resumed_id == "PL_NEW_RAW"
+    assert raw_api.created == vids
+    assert json.loads(state_path.read_text(encoding="utf-8"))["done_count"] == 250
+
+
+@pytest.mark.parametrize("exc_cls", [EOFError, KeyboardInterrupt])
+def test_rollback_eof_and_keyboard_interrupt_abort_cleanly(
+    tmp_path: Path, exc_cls: type[BaseException]
+) -> None:
+    rows = [_row(0, Action.KEEP_SONG, "a")]
+    meta = {"id": "PL1", "title": "Orig", "description": "", "privacy": "PRIVATE", "owned": True}
+    fake = FakeYtm({"PL1": (meta, [r.track for r in rows])})
+    new_id = rebuild(fake, "PL1", meta, rows, tmp_path)
+
+    def _raise(_prompt: str) -> str:
+        raise exc_cls()
+
+    msg = rollback("PL1", tmp_path, client=fake, delete_new=True, confirm=_raise)
+    assert "Delete cancelled." in msg
+    assert new_id in fake.playlists
+    assert (tmp_path / "state-PL1.json").exists()
+    assert not any(c[0] == "delete_playlist" for c in fake.calls)

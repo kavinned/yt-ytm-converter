@@ -77,3 +77,24 @@ def test_no_cands() -> None:
     assert pick_match(video, []) == (None, "none")
     gated_out = _track("Song Name", ["Other Artist"], 200, video_type="MUSIC_VIDEO_TYPE_ATV")
     assert pick_match(video, [gated_out]) == (None, "none")
+
+
+def test_empty_video_id_or_normalized_title_returns_none() -> None:
+    video = _track("Song Name", ["Artist A"], 200)
+    cand_no_id = Track(
+        video_id=None,
+        set_video_id=None,
+        title="Song Name",
+        artists=["Artist A"],
+        duration_s=200,
+        video_type="MUSIC_VIDEO_TYPE_ATV",
+    )
+    cand_empty_id = _track("Song Name", ["Artist A"], 200, video_id="", video_type="MUSIC_VIDEO_TYPE_ATV")
+    assert score_candidate(video, cand_no_id) is None
+    assert score_candidate(video, cand_empty_id) is None
+
+    noise_only_video = _track("(Official Video)", ["Artist A"], 200)
+    noise_only_cand = _track("(Official Audio)", ["Artist A"], 200, video_id="s1", video_type="MUSIC_VIDEO_TYPE_ATV")
+    assert score_candidate(noise_only_video, noise_only_cand) is None
+    assert score_candidate(noise_only_video, _track("Song Name", ["Artist A"], 200, video_id="s2")) is None
+    assert score_candidate(video, noise_only_cand) is None

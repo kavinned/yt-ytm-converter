@@ -12,6 +12,11 @@ class ScopeError(Exception):
     """Raised when a playlist is outside the supported user-owned regular playlist scope."""
 
 
+def playlist_url(pid: str) -> str:
+    """Return the YouTube Music web URL for a playlist ID."""
+    return f"https://music.youtube.com/playlist?list={pid}"
+
+
 def parse_playlist_id(s: str) -> str:
     """Extract a playlist ID from a bare ID or a YouTube/YTM URL with list=."""
     raw = s.strip()
@@ -30,7 +35,8 @@ def parse_playlist_id(s: str) -> str:
 
 def assert_in_scope(pid: str, meta: dict[str, Any]) -> None:
     """Raise ScopeError for Liked Music, mixes, albums, Episodes for Later, or unowned playlists."""
-    if pid in _OUT_OF_SCOPE_EXACT or pid.startswith(_OUT_OF_SCOPE_PREFIXES):
+    bare = pid.removeprefix("VL")
+    if bare in _OUT_OF_SCOPE_EXACT or bare.startswith(_OUT_OF_SCOPE_PREFIXES):
         raise ScopeError(f"Playlist {pid!r} is out of scope (only regular playlists supported)")
     if meta.get("owned") is False:
         raise ScopeError(f"Playlist {pid!r} is not owned by the current user")
@@ -93,7 +99,12 @@ class Ytm:
                 title, description, privacy_status=privacy, video_ids=first or None
             )
         )
-        new_id = res["id"] if isinstance(res, dict) else str(res)
+        if isinstance(res, dict):
+            if "id" not in res:
+                raise RuntimeError(f"create_playlist failed: {res}")
+            new_id = res["id"]
+        else:
+            new_id = str(res)
         if rest:
             self.add_items(new_id, rest)
         return new_id
@@ -101,14 +112,11 @@ class Ytm:
     def add_items(self, pid: str, video_ids: list[str]) -> None:
         for i in range(0, len(video_ids), 100):
             chunk = video_ids[i : i + 100]
-            call_with_retry(
+            res = call_with_retry(
                 lambda c=chunk: self._api.add_playlist_items(pid, videoIds=c, duplicates=True)
             )
-
-    def remove_items(self, pid: str, videos: list[dict[str, Any]]) -> None:
-        if not videos:
-            return
-        call_with_retry(lambda: self._api.remove_playlist_items(pid, videos))
+            if isinstance(res, dict) and res.get("status") != "STATUS_SUCCEEDED":
+                raise RuntimeError(f"add_playlist_items failed: {res}")
 
     def delete_playlist(self, pid: str) -> None:
         call_with_retry(lambda: self._api.delete_playlist(pid))

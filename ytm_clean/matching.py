@@ -17,6 +17,8 @@ class Scored:
 
 
 def score_candidate(video: Track, cand: Track) -> Scored | None:
+    if not cand.video_id:
+        return None
     if video.duration_s is None or cand.duration_s is None:
         return None
     dur_delta = abs(video.duration_s - cand.duration_s)
@@ -25,15 +27,18 @@ def score_candidate(video: Track, cand: Track) -> Scored | None:
     if version_tokens(video.title) != version_tokens(cand.title):
         return None
 
+    v_title = normalize_title(video.title)
+    c_title = normalize_title(cand.title)
+    if not v_title or not c_title:
+        return None
+
     v_artists = normalize_artists(video.artists)
     c_artists = normalize_artists(cand.artists)
     overlap = v_artists & c_artists
     if not overlap:
         return None
 
-    title_sim = SequenceMatcher(
-        None, normalize_title(video.title), normalize_title(cand.title)
-    ).ratio()
+    title_sim = SequenceMatcher(None, v_title, c_title).ratio()
     artist_jaccard = len(overlap) / len(v_artists | c_artists)
     dur_closeness = 1.0 - dur_delta / MAX_DURATION_DELTA_S
     score = 0.55 * title_sim + 0.30 * artist_jaccard + 0.15 * dur_closeness

@@ -64,7 +64,7 @@ def render_table(rows: list[PlanRow], playlist_title: str) -> str:
 
     action_counts = counts(rows)
     summary = ", ".join(f"{action.value}: {action_counts[action]}" for action in Action)
-    final_len = len(rows) - action_counts[Action.REMOVE_DUP]
+    final_len = sum(1 for r in rows if r.action != Action.REMOVE_DUP and r.track.video_id is not None)
     lines.append(summary)
     lines.append(f"final length {len(rows)} -> {final_len}")
     return "\n".join(lines)

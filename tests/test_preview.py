@@ -1,5 +1,6 @@
 import csv
 
+from ytm_clean.apply import final_video_ids
 from ytm_clean.models import Action, PlanRow, Track
 from ytm_clean.preview import counts, render_table, write_csv
 
@@ -169,3 +170,17 @@ def test_table_has_every_row_and_footer():
     assert "no-match: 1" in out
     assert "keep-song: 1" in out
     assert "final length 6 -> 5" in out
+
+
+def test_table_final_length_skips_null_video_id():
+    repl = _track(title="Matched", video_id="atv1", video_type="MUSIC_VIDEO_TYPE_ATV")
+    rows = [
+        _row(0, Action.KEEP_SONG, title="Song", video_id="atv0", classification="song"),
+        _row(1, Action.REPLACE, title="Video", video_id="omv1", replacement=repl, confidence=0.95),
+        _row(2, Action.REMOVE_DUP, title="Dup", video_id="omv2"),
+        _row(3, Action.KEEP_VIDEO, title="Unavailable", video_id=None, classification="other"),
+    ]
+    out = render_table(rows, "Nulls Playlist")
+    expected_final = len(final_video_ids(rows))
+    assert expected_final == 2
+    assert f"final length 4 -> {expected_final}" in out

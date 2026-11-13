@@ -61,7 +61,18 @@ def test_parse_bad():
 
 
 def test_assert_in_scope():
-    for pid in ["LM", "RDCLAK5uy_abc", "OLAK5uy_xyz", "MPRE_123", "SE"]:
+    for pid in [
+        "LM",
+        "RDCLAK5uy_abc",
+        "OLAK5uy_xyz",
+        "MPRE_123",
+        "SE",
+        "VLLM",
+        "VLSE",
+        "VLRDCLAK5uy_abc",
+        "VLOLAK5uy_xyz",
+        "VLMPRE_123",
+    ]:
         with pytest.raises(ScopeError):
             assert_in_scope(pid, {"owned": True})
 
@@ -69,6 +80,7 @@ def test_assert_in_scope():
         assert_in_scope("PLvalid123", {"owned": False})
 
     assert_in_scope("PLvalid123", {"owned": True})
+    assert_in_scope("VLPLvalid123", {"owned": True})
 
 
 def test_retry_then_ok():
@@ -207,3 +219,27 @@ def test_delete_playlist():
     ytm.delete_playlist("PL_NEW_123")
 
     assert api.calls == [("delete_playlist", ("PL_NEW_123",), {})]
+
+
+def test_add_items_raises_on_failed_dict_status():
+    api = _FakeApi()
+    api.add_playlist_items = lambda pid, videoIds=None, duplicates=False: {"status": "STATUS_FAILED"}
+    ytm = Ytm(api=api)
+
+    with pytest.raises(RuntimeError, match="add_playlist_items failed"):
+        ytm.add_items("PL_NEW_123", ["v1", "v2"])
+
+    api.add_playlist_items = lambda pid, videoIds=None, duplicates=False: {"status": "STATUS_SUCCEEDED"}
+    ytm.add_items("PL_NEW_123", ["v1"])
+
+
+def test_create_playlist_raises_on_error_dict():
+    api = _FakeApi()
+    api.create_playlist = lambda *args, **kwargs: {"status": "ERROR", "message": "denied"}
+    ytm = Ytm(api=api)
+
+    with pytest.raises(RuntimeError, match="create_playlist failed"):
+        ytm.create_playlist("My List", "Desc", "PRIVATE", ["v1"])
+
+    api.create_playlist = lambda *args, **kwargs: {"id": "PL_DICT_1"}
+    assert ytm.create_playlist("My List", "Desc", "PRIVATE", ["v1"]) == "PL_DICT_1"
