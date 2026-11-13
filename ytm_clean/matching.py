@@ -2,9 +2,10 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 from ytm_clean.models import Track
-from ytm_clean.normalize import normalize_artists, normalize_title, version_tokens
+from ytm_clean.normalize import alt_titles, normalize_artists, normalize_title, version_tokens
 
 MAX_DURATION_DELTA_S = 5
+MAX_SAME_SONG_DELTA_S = 15
 MAX_MV_DURATION_DELTA_S = 90
 EXACT_TITLE_FOR_MV = 0.95
 MIN_TITLE_SIM = 0.65
@@ -22,7 +23,7 @@ class Scored:
 def _same_song_cand(a: Track, b: Track) -> bool:
     if a.duration_s is None or b.duration_s is None:
         return False
-    if abs(a.duration_s - b.duration_s) > MAX_DURATION_DELTA_S:
+    if abs(a.duration_s - b.duration_s) > MAX_SAME_SONG_DELTA_S:
         return False
     if version_tokens(a.title) != version_tokens(b.title):
         return False
@@ -31,6 +32,22 @@ def _same_song_cand(a: Track, b: Track) -> bool:
     if not ta or ta != tb:
         return False
     return bool(normalize_artists(a.artists) & normalize_artists(b.artists))
+
+
+def _best_title_sim(v_titles: list[str], c_titles: list[str], v_artists: set[str]) -> float:
+    best = 0.0
+    for vt in v_titles:
+        variants = [vt]
+        for a in v_artists:
+            if vt.startswith(a + " "):
+                variants.append(vt[len(a) + 1 :])
+        for ct in c_titles:
+            for cand_vt in variants:
+                eff = ct if (cand_vt.endswith(" " + ct) and any(a in cand_vt[: -len(ct)] for a in v_artists)) else cand_vt
+                sim = SequenceMatcher(None, eff, ct).ratio()
+                if sim > best:
+                    best = sim
+    return best
 
 
 def score_candidate(video: Track, cand: Track) -> Scored | None:
@@ -44,9 +61,9 @@ def score_candidate(video: Track, cand: Track) -> Scored | None:
     if version_tokens(video.title) != version_tokens(cand.title):
         return None
 
-    v_title = normalize_title(video.title)
-    c_title = normalize_title(cand.title)
-    if not v_title or not c_title:
+    v_titles = alt_titles(video.title)
+    c_titles = alt_titles(cand.title)
+    if not v_titles or not c_titles:
         return None
 
     v_artists = normalize_artists(video.artists)
@@ -55,12 +72,7 @@ def score_candidate(video: Track, cand: Track) -> Scored | None:
     if not overlap:
         return None
 
-    if v_title.endswith(" " + c_title):
-        prefix = v_title[: -len(c_title)]
-        if any(a in prefix for a in v_artists):
-            v_title = c_title
-
-    title_sim = SequenceMatcher(None, v_title, c_title).ratio()
+    title_sim = _best_title_sim(v_titles, c_titles, v_artists)
     if title_sim < MIN_TITLE_SIM:
         return None
     if dur_delta > MAX_DURATION_DELTA_S and title_sim < EXACT_TITLE_FOR_MV:

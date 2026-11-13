@@ -1,4 +1,10 @@
-from ytm_clean.normalize import normalize_artists, normalize_title, version_tokens
+from ytm_clean.normalize import (
+    alt_titles,
+    normalize_artists,
+    normalize_title,
+    search_query_title,
+    version_tokens,
+)
 
 
 def test_strips_noise():
@@ -31,3 +37,15 @@ def test_version_tokens():
     assert version_tokens("Song") == frozenset()
     assert version_tokens("Song (Japanese Version)") == version_tokens("Song -Japanese ver.-")
     assert version_tokens("Song (English Version)") != version_tokens("Song")
+
+
+def test_search_query_title_preserves_symbols_and_accents():
+    assert search_query_title("Long Chat (#♥)") == "Long Chat (#♥)"
+    assert search_query_title("Soñar (Breaker)") == "Soñar (Breaker)"
+    assert search_query_title("03. IVE - BlueHeart (Official Video)") == "IVE - BlueHeart"
+    assert search_query_title("ITZY - Blossom (Audio Clip)") == "ITZY - Blossom"
+
+
+def test_alt_titles_extracts_bilingual_parens_without_version_tokens():
+    assert alt_titles("섬찟 (Hypnosis)") == [normalize_title("섬찟 (Hypnosis)"), "hypnosis"]
+    assert alt_titles("Song (Live)") == ["song live"]

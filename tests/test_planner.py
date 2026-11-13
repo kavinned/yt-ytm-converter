@@ -159,3 +159,18 @@ def test_build_plan_calls_on_progress():
         on_progress=lambda i, total, t: seen.append((i, total, t.title)),
     )
     assert seen == [(2, 2, "Video One")]
+
+
+def test_already_present_atv_detected_even_if_search_misses():
+    atv = _track("s1", title="Roller Coaster", artists=["NMIXX"], dur=180, vtype="MUSIC_VIDEO_TYPE_ATV")
+    mv = _track("v1", title="Roller Coaster", artists=["NMIXX"], dur=214, vtype="MUSIC_VIDEO_TYPE_OMV")
+    called = False
+
+    def search(_q: str) -> list[Track]:
+        nonlocal called
+        called = True
+        return []
+
+    rows = build_plan([atv, mv], search)
+    assert [r.action for r in rows] == [Action.KEEP_SONG, Action.REMOVE_DUP]
+    assert not called

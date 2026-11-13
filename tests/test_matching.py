@@ -81,6 +81,29 @@ def test_artist_prefix_stripped_in_scoring() -> None:
     assert matched is not None and matched.track.video_id == "s_unf"
 
 
+def test_bilingual_parenthetical_title_and_track_num_accept() -> None:
+    v1 = _track("Hypnosis", ["IVE"], 147)
+    c1 = _track("섬찟 (Hypnosis)", ["IVE"], 147, video_id="s_hyp", video_type="MUSIC_VIDEO_TYPE_ATV")
+    assert pick_match(v1, [c1])[1] == "accept"
+
+    v2 = _track("I Am the Best", ["2NE1"], 215)
+    c2 = _track("내가 제일 잘 나가 (I Am The Best)", ["2NE1"], 211, video_id="s_2ne1", video_type="MUSIC_VIDEO_TYPE_ATV")
+    assert pick_match(v2, [c2])[1] == "accept"
+
+    v3 = _track("03. IVE - BlueHeart", ["IVE"], 189)
+    c3 = _track("Blue Heart", ["IVE"], 188, video_id="s_bh", video_type="MUSIC_VIDEO_TYPE_ATV")
+    assert pick_match(v3, [c3])[1] == "accept"
+
+
+def test_identical_song_tie_within_15s_accepts() -> None:
+    video = _track("Everybody", ["SHINee"], 277)
+    c1 = _track("Everybody", ["SHINee"], 250, video_id="s1", video_type="MUSIC_VIDEO_TYPE_ATV")
+    c2 = _track("Everybody", ["SHINee"], 258, video_id="s2", video_type="MUSIC_VIDEO_TYPE_ATV")
+    matched, hint = pick_match(video, [c1, c2])
+    assert hint == "accept"
+    assert matched is not None and matched.track.video_id == "s2"
+
+
 def test_artist_gate() -> None:
     video = _track("Song Name", ["Artist A"], 200)
     other = _track("Song Name", ["Artist B"], 200, video_type="MUSIC_VIDEO_TYPE_ATV")
