@@ -43,6 +43,10 @@ class _FakeApi:
         self.calls.append(("remove_playlist_items", (playlistId, videos), {}))
         return "STATUS_SUCCEEDED"
 
+    def delete_playlist(self, playlistId: str):
+        self.calls.append(("delete_playlist", (playlistId,), {}))
+        return "STATUS_SUCCEEDED"
+
 
 def test_parse_url():
     assert parse_playlist_id("https://music.youtube.com/playlist?list=PLabc") == "PLabc"
@@ -194,3 +198,12 @@ def test_create_playlist_chunks_over_100():
     assert len(api.calls[0][1][3]) == 100
     assert api.calls[1][0] == "add_playlist_items"
     assert len(api.calls[1][1][1]) == 50
+
+
+def test_delete_playlist():
+    api = _FakeApi()
+    ytm = Ytm(api=api)
+
+    ytm.delete_playlist("PL_NEW_123")
+
+    assert api.calls == [("delete_playlist", ("PL_NEW_123",), {})]

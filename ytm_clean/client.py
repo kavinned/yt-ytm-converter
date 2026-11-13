@@ -109,3 +109,6 @@ class Ytm:
         if not videos:
             return
         call_with_retry(lambda: self._api.remove_playlist_items(pid, videos))
+
+    def delete_playlist(self, pid: str) -> None:
+        call_with_retry(lambda: self._api.delete_playlist(pid))

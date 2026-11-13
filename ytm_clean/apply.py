@@ -7,7 +7,6 @@ from typing import Any
 
 from ytm_clean.client import assert_in_scope
 from ytm_clean.models import Action, PlanRow, Track
-from ytm_clean.retry import call_with_retry
 
 CHUNK_SIZE = 100
 
@@ -23,16 +22,19 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
+def _target_video_id(row: PlanRow) -> str | None:
+    if row.action == Action.REMOVE_DUP:
+        return None
+    if row.action == Action.REPLACE:
+        return row.replacement.video_id if row.replacement else None
+    return row.track.video_id
+
+
 def final_video_ids(rows: list[PlanRow]) -> list[str]:
     """Resolve the ordered list of target video IDs from plan rows, preserving duplicates."""
     ids: list[str] = []
     for row in rows:
-        if row.action == Action.REMOVE_DUP:
-            continue
-        if row.action == Action.REPLACE:
-            vid = row.replacement.video_id if row.replacement else None
-        else:
-            vid = row.track.video_id
+        vid = _target_video_id(row)
         if vid:
             ids.append(vid)
     return ids
@@ -117,9 +119,7 @@ def rebuild(
 
     write_snapshot(pid, meta, [r.track for r in rows], out_path)
     for r in rows:
-        if r.action != Action.REMOVE_DUP and not (
-            r.replacement.video_id if r.action == Action.REPLACE and r.replacement else r.track.video_id
-        ):
+        if r.action != Action.REMOVE_DUP and not _target_video_id(r):
             print(f"Skipped null video_id at index {r.index}: {r.track.title}")
 
     expected_ids = final_video_ids(rows)
@@ -162,10 +162,8 @@ def rollback(
     if delete_new and new_id and client is not None:
         prompt_fn = confirm or input
         if prompt_fn(f"Type {new_id} to delete new playlist: ").strip() == new_id:
-            if hasattr(client, "delete_playlist"):
-                client.delete_playlist(new_id)
-            else:
-                call_with_retry(lambda: client._api.delete_playlist(new_id))
+            client.delete_playlist(new_id)
+            state_path.unlink(missing_ok=True)
             lines.append(f"Deleted new playlist: {new_id}")
         else:
             lines.append("Delete cancelled.")

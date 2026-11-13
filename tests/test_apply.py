@@ -57,6 +57,7 @@ class FakeYtm:
         on_create: object = None,
         fail_on_add_call: int | None = None,
         commit_before_fail: bool = False,
+        commit_prefix_on_fail: int | None = None,
     ) -> None:
         self.playlists: dict[str, tuple[dict, list[Track]]] = {
             pid: (dict(meta), list(tracks))
@@ -67,6 +68,7 @@ class FakeYtm:
         self._on_create = on_create
         self._fail_on_add_call = fail_on_add_call
         self._commit_before_fail = commit_before_fail
+        self._commit_prefix_on_fail = commit_prefix_on_fail
         self._add_call_count = 0
 
     @property
@@ -102,7 +104,10 @@ class FakeYtm:
         self._add_call_count += 1
         self.calls.append(("add_items", pid, list(video_ids)))
         if self._fail_on_add_call == self._add_call_count:
-            if self._commit_before_fail:
+            if self._commit_prefix_on_fail is not None:
+                _, tracks = self.playlists[pid]
+                tracks.extend(_track(vid, title=vid) for vid in video_ids[: self._commit_prefix_on_fail])
+            elif self._commit_before_fail:
                 _, tracks = self.playlists[pid]
                 tracks.extend(_track(vid, title=vid) for vid in video_ids)
             raise RuntimeError("simulated network crash mid-add_items")
@@ -292,3 +297,95 @@ def test_rollback_prints_urls_and_optional_delete(tmp_path: Path) -> None:
     rollback("PL1", tmp_path, client=fake, delete_new=True, confirm=lambda _: new_id)
     assert new_id not in fake.playlists
     assert ("delete_playlist", new_id) in fake.calls
+    assert not (tmp_path / "state-PL1.json").exists()
+
+
+def test_rollback_cancelled_confirmation_does_nothing(tmp_path: Path) -> None:
+    rows = [_row(0, Action.KEEP_SONG, "a")]
+    meta = {"id": "PL1", "title": "Orig", "description": "", "privacy": "PRIVATE", "owned": True}
+    fake = FakeYtm({"PL1": (meta, [r.track for r in rows])})
+    new_id = rebuild(fake, "PL1", meta, rows, tmp_path)
+
+    msg = rollback("PL1", tmp_path, client=fake, delete_new=True, confirm=lambda _: "wrong")
+    assert "Delete cancelled." in msg
+    assert new_id in fake.playlists
+    assert (tmp_path / "state-PL1.json").exists()
+    assert not any(c[0] == "delete_playlist" for c in fake.calls)
+
+
+def test_rerun_after_rollback_delete_creates_fresh_playlist(tmp_path: Path) -> None:
+    rows = [_row(0, Action.KEEP_SONG, "a"), _row(1, Action.KEEP_SONG, "b")]
+    meta = {"id": "PL1", "title": "Orig", "description": "", "privacy": "PRIVATE", "owned": True}
+    fake = FakeYtm({"PL1": (meta, [r.track for r in rows])})
+
+    first_id = rebuild(fake, "PL1", meta, rows, tmp_path)
+    rollback("PL1", tmp_path, client=fake, delete_new=True, confirm=lambda _: first_id)
+
+    second_id = rebuild(fake, "PL1", meta, rows, tmp_path)
+    assert second_id != first_id
+    assert [t.video_id for t in fake.playlists[second_id][1]] == ["a", "b"]
+
+
+def test_resume_partial_chunk_failure(tmp_path: Path) -> None:
+    vids = [f"v{i}" for i in range(250)]
+    rows = [_row(i, Action.KEEP_SONG, vid) for i, vid in enumerate(vids)]
+    meta = {"id": "PL1", "title": "Partial", "description": "", "privacy": "PRIVATE", "owned": True}
+
+    fake = FakeYtm(
+        {"PL1": (meta, [r.track for r in rows])},
+        fail_on_add_call=1,
+        commit_prefix_on_fail=40,
+    )
+    with pytest.raises(RuntimeError, match="simulated network crash"):
+        rebuild(fake, "PL1", meta, rows, tmp_path)
+
+    state = json.loads((tmp_path / "state-PL1.json").read_text(encoding="utf-8"))
+    new_id = state["new_id"]
+    assert [t.video_id for t in fake.playlists[new_id][1]] == vids[:140]
+
+    fake._fail_on_add_call = None
+    fake._commit_prefix_on_fail = None
+    resumed_id = rebuild(fake, "PL1", meta, rows, tmp_path)
+    assert resumed_id == new_id
+    assert [t.video_id for t in fake.playlists[new_id][1]] == vids
+
+
+def test_resume_divergence_raises(tmp_path: Path) -> None:
+    vids = [f"v{i}" for i in range(150)]
+    rows = [_row(i, Action.KEEP_SONG, vid) for i, vid in enumerate(vids)]
+    meta = {"id": "PL1", "title": "Drift", "description": "", "privacy": "PRIVATE", "owned": True}
+
+    fake = FakeYtm({"PL1": (meta, [r.track for r in rows])}, fail_on_add_call=1)
+    with pytest.raises(RuntimeError):
+        rebuild(fake, "PL1", meta, rows, tmp_path)
+
+    state = json.loads((tmp_path / "state-PL1.json").read_text(encoding="utf-8"))
+    new_id = state["new_id"]
+    fake.playlists[new_id][1][0] = _track("TAMPERED")
+    writes_before = len(fake.write_calls)
+
+    fake._fail_on_add_call = None
+    with pytest.raises(RuntimeError, match="diverge"):
+        rebuild(fake, "PL1", meta, rows, tmp_path)
+    assert len(fake.write_calls) == writes_before
+
+
+def test_null_video_id_and_empty_replace_skipped_and_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rows = [
+        _row(0, Action.KEEP_SONG, "a"),
+        _row(1, Action.KEEP_VIDEO, None),
+        _row(2, Action.REPLACE, "v_orig", repl_vid=None),
+        _row(3, Action.KEEP_SONG, "b"),
+    ]
+    assert final_video_ids(rows) == ["a", "b"]
+
+    meta = {"id": "PL1", "title": "Nulls", "description": "", "privacy": "PRIVATE", "owned": True}
+    fake = FakeYtm({"PL1": (meta, [r.track for r in rows])})
+    new_id = rebuild(fake, "PL1", meta, rows, tmp_path)
+
+    out = capsys.readouterr().out
+    assert [t.video_id for t in fake.playlists[new_id][1]] == ["a", "b"]
+    assert "index 1" in out
+    assert "index 2" in out
