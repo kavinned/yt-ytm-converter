@@ -196,16 +196,21 @@ def pick_unresolved(
             seen_songs.append(row.replacement)
 
     updated = list(rows)
-    for pos, row in enumerate(updated):
-        if row.action not in (Action.KEEP_VIDEO, Action.NO_MATCH) or not row.track.video_id:
-            continue
-
+    targets = [
+        pos
+        for pos, row in enumerate(updated)
+        if row.action in (Action.KEEP_VIDEO, Action.NO_MATCH) and row.track.video_id
+    ]
+    total_targets = len(targets)
+    for pick_num, pos in enumerate(targets, 1):
+        row = updated[pos]
         cands = _initial_candidates(row.track, search)[:limit]
         while True:
             artists = ", ".join(row.track.artists) or "Unknown"
             out_fn(
-                f"\n[{row.index}] {row.track.title} - {artists} ({_fmt_dur(row.track.duration_s)}) "
-                f"[{row.action.value}: {row.reason}] https://music.youtube.com/watch?v={row.track.video_id}"
+                f"\n[{pick_num}/{total_targets}] (#{row.index}) {row.track.title} - {artists} "
+                f"({_fmt_dur(row.track.duration_s)}) [{row.action.value}: {row.reason}] "
+                f"https://music.youtube.com/watch?v={row.track.video_id}"
             )
             if not cands:
                 out_fn("  (no search results)")
