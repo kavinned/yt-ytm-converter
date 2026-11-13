@@ -83,11 +83,10 @@ def test_two_videos_one_song():
 
 
 def test_low_conf_keeps():
-    video = _track("v1", title="Track One", artists=["Alice"], dur=200)
-    c1 = _track("s1", title="Track One", artists=["Alice"], dur=200, vtype="MUSIC_VIDEO_TYPE_ATV")
-    c2 = _track("s2", title="Track One", artists=["Alice"], dur=200, vtype="MUSIC_VIDEO_TYPE_ATV")
+    video = _track("v1", title="Track One", artists=["Alice", "Bob"], dur=200)
+    c1 = _track("s1", title="Track One", artists=["Alice"], dur=204, vtype="MUSIC_VIDEO_TYPE_ATV")
 
-    rows = build_plan([video], lambda _q: [c1, c2])
+    rows = build_plan([video], lambda _q: [c1])
     assert rows[0].action == Action.KEEP_VIDEO
     assert rows[0].replacement is None
 

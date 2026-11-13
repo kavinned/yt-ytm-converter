@@ -4,10 +4,12 @@ import unicodedata
 NOISE_TERMS: tuple[str, ...] = (
     "official music video",
     "official video",
+    "official m/v",
     "official audio",
     "lyric video",
     "lyrics",
     "audio",
+    "m/v",
     "hd",
     "4k",
     "hq",
@@ -30,8 +32,9 @@ _NOISE_ALT = "|".join(re.escape(t).replace(r"\ ", r"\s+") for t in NOISE_TERMS)
 _BRACKET_FEAT_RE = re.compile(r"[\(\[]\s*(?:feat\.?|ft\.?|featuring)\b[^)\]]*[\)\]]")
 _BRACKET_NOISE_RE = re.compile(rf"[\(\[]\s*(?:{_NOISE_ALT})\s*[\)\]]")
 _INLINE_NOISE_RE = re.compile(
-    r"\b(?:official\s+(?:music\s+)?video|official\s+audio|lyric\s+video|hd|4k)\b"
+    r"\b(?:official\s+(?:music\s+)?video|official\s+m/v|official\s+audio|lyric\s+video|m/v|hd|4k)\b"
 )
+_LANG_VER_RE = re.compile(r"\b(japanese|english|korean|chinese|spanish)\s+ver(?:sion)?\b")
 _FEAT_TAIL_RE = re.compile(r"\b(?:feat\.?|ft\.?|featuring)\b.*$")
 _ARTIST_SPLIT_RE = re.compile(r"\s*(?:,|&|/|\bfeat\.?|\bft\.?|\bfeaturing\b)\s*")
 _NON_WORD_RE = re.compile(r"[^\w\s]")
@@ -68,4 +71,6 @@ def normalize_artists(names: list[str]) -> set[str]:
 
 def version_tokens(s: str) -> frozenset[str]:
     text = " ".join(_NON_WORD_RE.sub(" ", _fold(s)).split())
-    return frozenset(tok for tok, pat in _VERSION_RES if pat.search(text))
+    tokens = {tok for tok, pat in _VERSION_RES if pat.search(text)}
+    tokens.update(f"{m.group(1)} ver" for m in _LANG_VER_RE.finditer(text))
+    return frozenset(tokens)

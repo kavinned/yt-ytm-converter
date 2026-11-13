@@ -7,6 +7,8 @@ def test_strips_noise():
     assert normalize_title("Song (feat. Bob) (Audio)") == "song"
     assert normalize_title("Song ft. Bob") == "song"
     assert normalize_title("Song featuring Bob (Official Music Video) [4K]") == "song"
+    assert normalize_title("Song OFFICIAL M/V (feat. Bob)") == "song"
+    assert normalize_title("Song [M/V]") == "song"
 
 
 def test_keeps_meaningful_parens():
@@ -27,3 +29,5 @@ def test_version_tokens():
     assert "live" in version_tokens("Song (Live at X)")
     assert "sped up" in version_tokens("Song (Sped Up)")
     assert version_tokens("Song") == frozenset()
+    assert version_tokens("Song (Japanese Version)") == version_tokens("Song -Japanese ver.-")
+    assert version_tokens("Song (English Version)") != version_tokens("Song")
